@@ -7,7 +7,8 @@ export class DateCell {
   constructor(
     public date: Dayjs,
     public displayMonth: Dayjs,
-    public selectedDate?: Dayjs
+    public selectedDate?: Dayjs,
+    public highlightedDate?: Dayjs,
   ) { };
 
   public get isToday() {
@@ -21,5 +22,10 @@ export class DateCell {
   public get isSelected() {
     if (!this.selectedDate) return false;
     return this.date.isSame(this.selectedDate, 'day')
+  }
+
+  public get isHighlighted() {
+    if (!this.highlightedDate) return false;
+    return this.date.isSame(this.highlightedDate, 'day')
   }
 }

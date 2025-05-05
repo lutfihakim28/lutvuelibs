@@ -1,6 +1,6 @@
 <script setup lang="ts">
-  import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
-  import { Dayjs } from 'dayjs';
+  import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
+  import dayjs, { Dayjs } from 'dayjs';
   import { useSwipe } from '@vueuse/core'
   import { DateCell } from '@/models/DateCell';
   import { CalendarModeEnum } from '@/enums/CalendarModeEnum';
@@ -21,6 +21,7 @@
   ];
 
   const highlightedDate = ref<Dayjs>();
+  const latestHighlightedDate = ref<Dayjs>();
   const datesRef = useTemplateRef('datesEl');
 
   const currentMonthDates = computed<DateCell[]>(() => {
@@ -35,7 +36,7 @@
 
     return Array.from(
       { length: endDate.diff(startDate, 'day') },
-      (_, index) => new DateCell(startDate.add(index, 'days'), displayMonth.value, selectedDate.value)
+      (_, index) => new DateCell(startDate.add(index, 'days'), displayMonth.value, selectedDate.value, highlightedDate.value)
     );
   })
 
@@ -51,8 +52,9 @@
 
   onMounted(() => {
     datesRef.value?.addEventListener('wheel', onWheel)
-    document.addEventListener('keypress', moveHighlight)
+    document.addEventListener('keydown', moveHighlight)
     document.addEventListener('mousemove', mouseMove)
+    document.addEventListener('keypress', onEnter)
   })
 
   function onWheel(event: WheelEvent) {
@@ -92,17 +94,53 @@
   }
 
   function moveHighlight(event: KeyboardEvent) {
-    console.log(event);
+    if (!highlightedDate.value) {
+      highlightedDate.value = latestHighlightedDate.value || selectedDate.value || dayjs();
+      return
+    }
+    const key = event.code;
+    switch (key) {
+      case 'ArrowRight':
+        highlightedDate.value = highlightedDate.value.add(1, 'day')
+        break;
+      case 'ArrowLeft':
+        highlightedDate.value = highlightedDate.value.subtract(1, 'day')
+        break;
+      case 'ArrowDown':
+        highlightedDate.value = highlightedDate.value.add(1, 'week')
+        break;
+      case 'ArrowUp':
+        highlightedDate.value = highlightedDate.value.subtract(1, 'week')
+        break;
+      default:
+        break;
+    }
+  }
+
+  function onEnter(event: KeyboardEvent) {
+    if (event.code === 'Enter' && highlightedDate.value && !highlightedDate.value.isSame(selectedDate.value)) {
+      selectDate(highlightedDate.value)
+    }
   }
 
   function mouseMove() {
-    highlightedDate.value = undefined;
+    if (highlightedDate.value) {
+      latestHighlightedDate.value = highlightedDate.value;
+      highlightedDate.value = undefined;
+    }
   }
+
+  watch(highlightedDate, (date) => {
+    if (date && !date.isSame(displayMonth.value, 'month')) {
+      displayMonth.value = date;
+    }
+  })
 
   onUnmounted(() => {
     datesRef.value?.removeEventListener('wheel', onWheel)
-    document.removeEventListener('keypress', moveHighlight)
+    document.removeEventListener('keydown', moveHighlight)
     document.removeEventListener('mousemove', mouseMove)
+    document.removeEventListener('keypress', onEnter)
   })
 </script>
 
@@ -143,7 +181,19 @@
         <button
           v-for="(cell, index) in currentMonthDates"
           :key="index"
-          :class="['text-center px-2 py-1 border w-12 h-12', cell.isToday ? 'border-accent-600' : 'border-transparent', cell.isInMonth ? 'text-typograph-200' : 'text-typograph-500', cell.isSelected ? 'bg-accent-600' : 'hover:bg-accent-500/30 bg-transparent']"
+          :class="[
+            'text-center px-2 py-1 border w-12 h-12',
+            {
+              'border-transparent': !cell.isToday,
+              'border-accent-600': cell.isToday,
+              'text-typograph-200': cell.isInMonth,
+              'text-typograph-500': !cell.isInMonth,
+              'bg-accent-600': cell.isSelected,
+              'bg-accent-500/30': cell.isHighlighted && !cell.isSelected,
+              'bg-transparent': !cell.isHighlighted && !cell.isSelected,
+              'hover:bg-accent-500/30': !highlightedDate,
+            },
+          ]"
           @click="() => selectDate(cell.date)"
           :disabled="cell.isSelected"
         >
